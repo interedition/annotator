@@ -288,6 +288,7 @@ class Annotator extends Delegator
   setupAnnotation: (annotation, fireEvents=true) ->
     root = @wrapper[0]
     annotation.ranges or= @selectedRanges
+    annotation.id     or= 'NEW'
 
     normedRanges = []
     for r in annotation.ranges
@@ -307,7 +308,9 @@ class Annotator extends Delegator
     for normed in normedRanges
       annotation.quote.push      $.trim(normed.text())
       annotation.ranges.push     normed.serialize(@wrapper[0], '.annotator-hl')
-      $.merge annotation.highlights, this.highlightRange(normed)
+    
+    # Mark the range for the annotation TODO UNLESS NEW?
+    annotation.highlights = this.markRange(normedRanges, annotation.id)
 
     # Join all the quotes into one string.
     annotation.quote = annotation.quote.join(' / ')
@@ -393,9 +396,10 @@ class Annotator extends Delegator
       @plugins['Store'].dumpAnnotations()
     else
       console.warn(_t("Can't dump annotations without Store plugin."))
-
+      
   # Public: Wraps the DOM Nodes within the provided range with a highlight
   # element of the specified class and returns the highlight Elements.
+  # To be used for temporary highlighting when a range is selected.
   #
   # normedRange - A NormalizedRange to be highlighted.
   # cssClass - A CSS class to use for the highlight (default: 'annotator-hl')
@@ -405,7 +409,6 @@ class Annotator extends Delegator
     white = /^\s*$/
 
     hl = $("<span class='#{cssClass}'></span>")
-
     # Ignore text nodes that contain only whitespace characters. This prevents
     # spans being injected between elements that can only contain a restricted
     # subset of nodes such as table rows and lists. This does mean that there
@@ -414,17 +417,34 @@ class Annotator extends Delegator
     for node in normedRange.textNodes() when not white.test(node.nodeValue)
       $(node).wrapAll(hl).parent().show()[0]
 
-  # Public: highlight a list of ranges
+
+  # Public: Inserts a mark before and after the highlighted span
   #
-  # normedRanges - An array of NormalizedRanges to be highlighted.
-  # cssClass - A CSS class to use for the highlight (default: 'annotator-hl')
+  # normedRange - A NormalizedRange to be highlighted.
+  # TxtRepoID - The ID of the annotation.
   #
   # Returns an array of highlight Elements.
-  highlightRanges: (normedRanges, cssClass='annotator-hl') ->
+  #
+  #
+  markRange: (normedRange, TxtRepoID='42') ->
+    node = normedRange.textNodes()
+    $(node[0]).before("<mark id='#{TxtRepoID}_start' />")
+    $(node[node.length - 1]).after("<mark id='#{TxtRepoID}_end' />")
+    normedRange
+
+
+  # Public: highlight a list of ranges
+  #
+  # annotatedRanges - An associative array of AnnotationID ->  NormalizedRanges 
+  #   to be marked.
+  # 
+  # Returns an array of highlight Elements.
+  markRanges: (annotatedRanges) ->
     highlights = []
-    for r in normedRanges
-      $.merge highlights, this.highlightRange(r, cssClass)
+    for id, r in normedRanges
+      $.merge highlights, this.markRange(r, id)
     highlights
+
 
   # Public: Registers a plugin with the Annotator. A plugin can only be
   # registered once. The plugin will be instantiated in the following order.
@@ -647,7 +667,9 @@ class Annotator extends Delegator
     # Show a temporary highlight so the user can see what they selected
     if @selectedRanges and @selectedRanges.length
       ranges = (Range.sniff(r).normalize() for r in @selectedRanges)
-      highlights = this.highlightRanges(ranges, 'annotator-hl annotator-hl-temporary')
+      highlights = []
+      for r in ranges
+        $.merge highlights, this.highlightRange(r, 'annotator-hl annotator-hl-temporary')
 
       @editor.element.one 'hide', ->
         for h in highlights
