@@ -1,4 +1,6 @@
 .DS_Store
 .cake_task_cache
+.do_built*
 *.sublime-workspace
+*.did
 node_modules
